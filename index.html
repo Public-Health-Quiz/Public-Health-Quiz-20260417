@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>感染症クイズ</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f7fb; --card:#fff; --primary:#2b6cb0; --primary-d:#1e4e7c;
+    --ok:#38a169; --ok-bg:#e6fffa; --ng:#e53e3e; --ng-bg:#fff5f5;
+    --muted:#718096; --border:#e2e8f0; --accent:#fefcbf;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:#1a202c}
+  #app{max-width:860px;margin:0 auto;padding:16px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  header h1{font-size:20px;margin:0;color:var(--primary-d)}
+  .card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px}
+  button{cursor:pointer;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:#fff;transition:all .15s}
+  button:hover{background:#f7fafc}
+  button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+  button.primary:hover{background:var(--primary-d)}
+  button.ghost{background:transparent;border-color:var(--border)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .q-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+  .q-grid button{padding:14px 8px;font-weight:600}
+  .top-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .option{display:flex;align-items:center;padding:10px 12px;border:2px solid var(--border);border-radius:10px;margin-bottom:6px;user-select:none;background:#fff;text-align:left;width:100%;font-size:14px;line-height:1.4}
+  .option.selected{background:#ebf8ff;border-color:var(--primary)}
+  .option.correct{background:var(--ok-bg);border-color:var(--ok)}
+  .option.wrong{background:var(--ng-bg);border-color:var(--ng)}
+  .option.missed{background:#fefcbf;border-color:#d69e2e}
+  .option .mark{display:inline-block;width:22px;height:22px;line-height:20px;text-align:center;margin-right:10px;border-radius:50%;border:2px solid #cbd5e0;font-size:12px;flex-shrink:0}
+  .option.selected .mark{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .option.correct .mark{background:var(--ok);color:#fff;border-color:var(--ok)}
+  .option.wrong .mark{background:var(--ng);color:#fff;border-color:var(--ng)}
+  .option.missed .mark{background:#d69e2e;color:#fff;border-color:#d69e2e}
+  .status-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:14px;color:var(--muted)}
+  .remaining{font-weight:700;color:var(--primary-d);font-size:16px}
+  .timer{font-variant-numeric:tabular-nums;font-weight:600}
+  .result-summary{font-size:18px;margin-bottom:8px}
+  .result-summary .big{font-size:28px;font-weight:800;color:var(--primary-d)}
+  .hidden{display:none !important}
+  .rec-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px}
+  .stat{background:#edf2f7;border-radius:10px;padding:10px 12px}
+  .stat .label{font-size:12px;color:var(--muted)}
+  .stat .value{font-size:22px;font-weight:700;color:var(--primary-d)}
+  .stat .sub{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left}
+  th{background:#edf2f7;font-weight:600}
+  .note{background:#fffaf0;border-left:4px solid #ecc94b;padding:10px 12px;border-radius:6px;font-size:13px;color:#744210;margin:8px 0}
+  .chart-wrap{position:relative;height:260px;width:100%}
+  input[type=text],input[type=password]{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;width:100%}
+  textarea{width:100%;min-height:140px;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:monospace;font-size:12px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  h2{font-size:17px;margin:4px 0 10px;color:var(--primary-d)}
+  h3{font-size:15px;margin:10px 0 6px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;background:#edf2f7;font-size:12px;color:var(--muted);margin-left:6px}
+  .link-btn{background:none;border:none;color:var(--primary);text-decoration:underline;padding:0;font-size:14px}
+  .qnav{display:flex;justify-content:space-between;margin-top:12px;gap:8px;flex-wrap:wrap}
+  @media (max-width:480px){
+    .option{font-size:13px}
+    header h1{font-size:18px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>感染症分類クイズ</h1>
+    <div>
+      <button class="ghost" onclick="showView('home')">🏠</button>
+      <button class="ghost" onclick="showView('records')">📊</button>
+      <button class="ghost" onclick="showView('admin')">🔑</button>
+    </div>
+  </header>
+
+  <!-- HOME -->
+  <section id="view-home">
+    <div class="card">
+      <h2>挑戦モードを選択</h2>
+      <div class="top-actions">
+        <button class="primary" onclick="startSequence()">問1から順番に挑戦</button>
+        <button onclick="showView('records')">プレイ記録を見る</button>
+      </div>
+      <h3>問題を選んで挑戦</h3>
+      <div class="q-grid" id="qGrid"></div>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="view-quiz" class="hidden">
+    <div class="card">
+      <div class="status-bar">
+        <div><span class="badge" id="qBadge"></span><span class="badge" id="modeBadge"></span></div>
+        <div class="timer" id="timer">00:00</div>
+      </div>
+      <h2 id="qTitle"></h2>
+      <div class="status-bar">
+        <div class="remaining" id="remaining"></div>
+        <div style="font-size:13px;color:var(--muted)">正解数: <span id="correctCount"></span> 個</div>
+      </div>
+      <div id="optionsBox"></div>
+      <div class="qnav">
+        <button onclick="cancelQuiz()">中断してホームへ</button>
+        <button class="primary" id="submitBtn" onclick="submitAnswer()" disabled>解答する</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="view-result" class="hidden">
+    <div class="card">
+      <h2 id="rTitle"></h2>
+      <div class="result-summary">
+        正答率 <span class="big" id="rPct"></span>　（<span id="rCorrect"></span> / <span id="rTotal"></span>）
+      </div>
+      <div class="status-bar">
+        <div>解答時間: <strong id="rTime"></strong></div>
+        <div class="timer" id="rQid"></div>
+      </div>
+      <div id="rOptions"></div>
+      <div class="note" id="rNote"></div>
+      <div class="qnav">
+        <button onclick="showView('home')">ホームへ</button>
+        <div style="display:flex;gap:8px">
+          <button onclick="retryCurrent()">もう一度</button>
+          <button class="primary" id="nextBtn" onclick="nextQuestion()">次の問題へ</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SESSION RESULT (sequence end) -->
+  <section id="view-session" class="hidden">
+    <div class="card">
+      <h2>連続挑戦おつかれさまでした！</h2>
+      <div class="result-summary">総合正答率 <span class="big" id="sPct"></span>　（<span id="sCorrect"></span> / <span id="sTotal"></span>）</div>
+      <div>総解答時間: <strong id="sTime"></strong></div>
+      <h3>問別スコア</h3>
+      <table id="sTable"></table>
+      <div class="qnav">
+        <button onclick="showView('home')">ホームへ</button>
+        <button class="primary" onclick="showView('records')">記録を見る</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RECORDS -->
+  <section id="view-records" class="hidden">
+    <div class="card">
+      <h2>この端末のプレイ記録</h2>
+      <div class="row">
+        <div>端末名: <input type="text" id="deviceName" style="max-width:240px" oninput="saveDeviceName()"></div>
+      </div>
+      <div class="rec-stats">
+        <div class="stat"><div class="label">プレイ回数</div><div class="value" id="statCount">0</div><div class="sub">問単位 + 連続挑戦を合算</div></div>
+        <div class="stat"><div class="label">最高正答率</div><div class="value" id="statBest">-</div><div class="sub" id="statBestSub"></div></div>
+        <div class="stat"><div class="label">最短解答時間</div><div class="value" id="statFast">-</div><div class="sub" id="statFastSub"></div></div>
+        <div class="stat"><div class="label">累積プレイ時間</div><div class="value" id="statTotal">0秒</div></div>
+      </div>
+      <h3>通算正答率の推移（連続挑戦：問1〜問11）</h3>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">「問1から順番に挑戦」で全11問を解いた回のみが表示されます</div>
+      <div class="chart-wrap"><canvas id="chartSeq"></canvas></div>
+      <h3>問別 正答率の推移</h3>
+      <div class="row">
+        <label style="font-size:13px">問を選択:
+          <select id="qSelect" onchange="renderPerQChart()"></select>
+        </label>
+      </div>
+      <div class="chart-wrap"><canvas id="chartPerQ"></canvas></div>
+      <h3>問別 最高・平均正答率</h3>
+      <div class="chart-wrap"><canvas id="chartByQ"></canvas></div>
+      <h3>履歴（新しい順）</h3>
+      <div style="max-height:320px;overflow:auto">
+        <table id="histTable"></table>
+      </div>
+      <div class="qnav">
+        <button onclick="showView('home')">ホームへ</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="view-admin" class="hidden">
+    <div class="card">
+      <h2>管理者メニュー</h2>
+      <div id="adminLocked">
+        <p>パスワードを入力してください（初回は新しいパスワードを設定します）。</p>
+        <div class="row">
+          <input type="password" id="adminPw" placeholder="パスワード" style="max-width:260px">
+          <button class="primary" onclick="adminLogin()">ログイン</button>
+          <button class="ghost" onclick="adminReset()">パスワードを忘れた</button>
+        </div>
+        <div id="adminMsg" style="color:var(--ng);font-size:13px"></div>
+      </div>
+
+      <div id="adminContent" class="hidden">
+        <div class="row">
+          <strong>端末別プレイ記録</strong>
+          <select id="deviceSelect" onchange="renderAdmin()"></select>
+          <button class="ghost" onclick="adminLogout()">ログアウト</button>
+        </div>
+        <div class="rec-stats">
+          <div class="stat"><div class="label">プレイ回数</div><div class="value" id="aCount">0</div></div>
+          <div class="stat"><div class="label">累計プレイ時間</div><div class="value" id="aTotal">0秒</div></div>
+          <div class="stat"><div class="label">平均正答率</div><div class="value" id="aAvg">-</div></div>
+          <div class="stat"><div class="label">最高正答率</div><div class="value" id="aBest">-</div></div>
+        </div>
+        <h3>通算正答率の推移（連続挑戦：問1〜問11）</h3>
+        <div class="chart-wrap"><canvas id="adminChart"></canvas></div>
+        <h3>問別 正答率の推移</h3>
+        <div class="row">
+          <label style="font-size:13px">問を選択:
+            <select id="adminQSelect" onchange="renderAdminPerQ()"></select>
+          </label>
+        </div>
+        <div class="chart-wrap"><canvas id="adminPerQChart"></canvas></div>
+        <h3>問別 平均正答率</h3>
+        <div class="chart-wrap"><canvas id="adminQChart"></canvas></div>
+        <h3>履歴一覧</h3>
+        <div style="max-height:300px;overflow:auto"><table id="adminTable"></table></div>
+
+        <h3>端末データの受け渡し</h3>
+        <p style="font-size:13px;color:var(--muted)">各端末の記録は localStorage に保存されます。別端末の記録を集約するには、各端末で「エクスポート」し、管理者端末で「インポート」してください。</p>
+        <div class="row">
+          <button onclick="exportData()">この端末の記録をエクスポート</button>
+          <button onclick="document.getElementById('importBox').classList.toggle('hidden')">インポート</button>
+          <button onclick="clearAllData()" style="color:var(--ng)">全データを削除</button>
+          <button onclick="changePassword()">パスワード変更</button>
+        </div>
+        <div id="importBox" class="hidden" style="margin-top:8px">
+          <textarea id="importText" placeholder="エクスポートJSONを貼り付け"></textarea>
+          <button class="primary" onclick="importData()" style="margin-top:6px">インポート実行</button>
+        </div>
+        <div id="exportBox" class="hidden" style="margin-top:8px">
+          <textarea id="exportText" readonly></textarea>
+          <button onclick="copyExport()" style="margin-top:6px">コピー</button>
+        </div>
+      </div>
+      <div class="qnav">
+        <button onclick="showView('home')">ホームへ</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ====== データ定義 ====== */
+const ALL_OPTIONS = [
+  "梅毒","水痘","結核","破傷風","狂犬病","百日咳","風しん","コレラ","ペスト",
+  "手足口病","デング熱","腸チフス","ラッサ熱","マラリア","日本脳炎","A型肝炎",
+  "B型肝炎","C型肝炎","E型肝炎","日本紅斑熱","細菌性赤痢","ジフテリア","つつが虫病","淋菌感染症",
+  "南米出血熱","パラチフス","エボラ出血熱","ボツリヌス症","レジオネラ症","流行性耳下腺炎",
+  "マールブルグ病","チクングニア熱","ヘルパンギーナ","痘そう（天然痘）","麻しん（はしか）",
+  "流行性角結膜炎","エキノコックス症","ウエストナイル熱","尖圭コンジローマ","急性出血性結膜炎",
+  "腸管出血性大腸菌感染症","マイコプラズマ肺炎","ジカウイルス感染症","侵襲性肺炎球菌感染症",
+  "性器クラミジア感染症","薬剤耐性緑膿菌感染症","侵襲性髄膜炎菌感染症","クリプトスポリジウム症",
+  "急性灰白髄炎（ポリオ）","鳥インフルエンザ（H5N1）","鳥インフルエンザ（H7N9）",
+  "クリミア・コンゴ出血熱","中東呼吸器症候群（MERS）","重症急性呼吸器症候群（SARS）",
+  "後天性免疫不全症候群（AIDS）","感染性胃腸炎（ロタウイルス）","感染性胃腸炎（ノロウイルス）",
+  "クロイツフェルト・ヤコブ病","性器ヘルペスウイルス感染症","侵襲性インフルエンザ菌感染症",
+  "劇症型溶血性レンサ球菌感染症","薬剤耐性アシネトバクター感染症",
+  "重症熱性血小板減少症候群（SFTS）","バンコマイシン耐性腸球菌(VRE)感染症",
+  "新型コロナウイルス感染症（COVID-19）","鳥インフルエンザ（H5N1、H7N9を除く）",
+  "メチシリン耐性黄色ブドウ球菌(MRSA)感染症","バンコマイシン耐性黄色ブドウ球菌(VRSA)感染症",
+  "インフルエンザ（鳥インフルエンザ及び新型インフルエンザ等感染症を除く）"
+];
+
+const QUESTIONS = [
+  {id:1,name:"一類感染症",title:"一類感染症を全て選べ（全7種）",
+   correct:["エボラ出血熱","マールブルグ病","南米出血熱","ラッサ熱","クリミア・コンゴ出血熱","痘そう（天然痘）","ペスト"],
+   note:"一類感染症は7種。ペストのみ病原体が細菌由来、他はウイルス由来です。"},
+  {id:2,name:"二類感染症",title:"二類感染症を全て選べ（全7種）",
+   correct:["鳥インフルエンザ（H5N1）","鳥インフルエンザ（H7N9）","急性灰白髄炎（ポリオ）","重症急性呼吸器症候群（SARS）","中東呼吸器症候群（MERS）","結核","ジフテリア"],
+   note:"結核、ジフテリアのみ病原体が細菌由来です。"},
+  {id:3,name:"三類感染症",title:"三類感染症を全て選べ（全5種）",
+   correct:["コレラ","細菌性赤痢","腸管出血性大腸菌感染症","腸チフス","パラチフス"],
+   note:"病原体はすべて細菌由来です。"},
+  {id:4,name:"四類感染症",title:"四類感染症を全て選べ",
+   correct:["鳥インフルエンザ（H5N1、H7N9を除く）","A型肝炎","E型肝炎","日本脳炎","デング熱","チクングニア熱","ウエストナイル熱","ジカウイルス感染症","狂犬病","重症熱性血小板減少症候群（SFTS）","ボツリヌス症","つつが虫病","日本紅斑熱","レジオネラ症","マラリア","エキノコックス症"],
+   note:"基本的にヒト－ヒト感染が起こらないのが特徴（SFTSは極めてまれにヒト－ヒト感染の報告あり）。"},
+  {id:5,name:"五類感染症",title:"五類感染症のうち、全数把握対象疾患を全て選べ",
+   correct:["麻しん（はしか）","百日咳","風しん","B型肝炎","C型肝炎","後天性免疫不全症候群（AIDS）","梅毒","侵襲性インフルエンザ菌感染症","侵襲性肺炎球菌感染症","侵襲性髄膜炎菌感染症","破傷風","バンコマイシン耐性黄色ブドウ球菌(VRSA)感染症","バンコマイシン耐性腸球菌(VRE)感染症","薬剤耐性アシネトバクター感染症","クリプトスポリジウム症","劇症型溶血性レンサ球菌感染症","クロイツフェルト・ヤコブ病"],
+   note:"五類感染症のうち全数把握対象は17疾患。"},
+  {id:6,name:"空気感染（飛沫核感染）",title:"空気感染（飛沫核感染）するものを全て選べ",
+   correct:["麻しん（はしか）","結核","水痘"],
+   note:"空気感染（飛沫核感染）する代表例は「麻しん・結核・水痘」の3つ。"},
+  {id:7,name:"DNAウイルス",title:"病原体がDNAウイルスであるものを全て選べ",
+   correct:["痘そう（天然痘）","B型肝炎","水痘","流行性角結膜炎","尖圭コンジローマ","性器ヘルペスウイルス感染症"],
+   note:"流行性角結膜炎はヒトアデノウイルス、尖圭コンジローマはヒトパピローマウイルス、性器ヘルペスウイルス感染症は単純ヘルペスウイルス2型。"},
+  {id:8,name:"新興感染症",title:"新興感染症として代表的なものを選べ（13種）",
+   correct:["エボラ出血熱","鳥インフルエンザ（H5N1）","鳥インフルエンザ（H7N9）","重症急性呼吸器症候群（SARS）","中東呼吸器症候群（MERS）","腸管出血性大腸菌感染症","E型肝炎","重症熱性血小板減少症候群（SFTS）","レジオネラ症","C型肝炎","後天性免疫不全症候群（AIDS）","クリプトスポリジウム症","新型コロナウイルス感染症（COVID-19）"],
+   note:"その他、成人T細胞白血病（ATL）、カンピロバクター感染症など。定義が明確でないため資料によって記載がやや異なります。"},
+  {id:9,name:"再興感染症",title:"再興感染症として代表的なものを選べ（4種）",
+   correct:["結核","デング熱","マラリア","劇症型溶血性レンサ球菌感染症"],
+   note:"定義が明確でないため資料によって記載がやや異なります。"},
+  {id:10,name:"検疫感染症",title:"検疫感染症に指定されているものを全て選べ",
+   correct:["エボラ出血熱","マールブルグ病","南米出血熱","ラッサ熱","クリミア・コンゴ出血熱","痘そう（天然痘）","ペスト","鳥インフルエンザ（H5N1）","鳥インフルエンザ（H7N9）","中東呼吸器症候群（MERS）","デング熱","チクングニア熱","ジカウイルス感染症","マラリア"],
+   note:"一類感染症（7種）＋政令で定められたもの（7種）。新型インフルエンザ等感染症も含まれますが、2024年5月時点で該当なし。"},
+  {id:11,name:"一種病原体等",title:"病原体が「一種病原体等」に指定されているものを全て選べ",
+   correct:["エボラ出血熱","マールブルグ病","南米出血熱","ラッサ熱","クリミア・コンゴ出血熱","痘そう（天然痘）"],
+   note:"一類感染症のうち、病原体がウイルス由来であるもの（ペストを除く6種）。"}
+];
+
+const EXTRA_DUMMIES = 10; // 正解数 + 10
+
+/* ====== 状態管理 ====== */
+const LS_KEY = "kansen_quiz_v1";
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const s = JSON.parse(raw);
+      if(!s.deviceId) s.deviceId = genDeviceId();
+      if(!s.deviceName) s.deviceName = "端末-" + s.deviceId.slice(0,4);
+      if(!s.records) s.records = [];
+      if(!s.imported) s.imported = {};
+      if(!s.adminPwHash) s.adminPwHash = null;
+      return s;
+    }
+  }catch(e){}
+  const id = genDeviceId();
+  return {deviceId:id, deviceName:"端末-"+id.slice(0,4), records:[], imported:{}, adminPwHash:null};
+}
+function saveState(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+function genDeviceId(){
+  return "d-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,8);
+}
+async function hashPw(pw){
+  const enc = new TextEncoder().encode("kansen-salt::"+pw);
+  const h = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+/* ====== ビュー切替 ====== */
+function showView(name){
+  ["home","quiz","result","session","records","admin"].forEach(v=>{
+    document.getElementById("view-"+v).classList.add("hidden");
+  });
+  document.getElementById("view-"+name).classList.remove("hidden");
+  if(name==="records") renderRecords();
+  if(name==="home") renderHome();
+  if(name==="admin") prepareAdmin();
+  window.scrollTo(0,0);
+}
+
+/* ====== ホーム ====== */
+function renderHome(){
+  const g = document.getElementById("qGrid");
+  g.innerHTML = "";
+  QUESTIONS.forEach(q=>{
+    const b = document.createElement("button");
+    b.innerHTML = '<div style="font-size:12px;color:#718096">問'+q.id+'</div><div style="font-size:14px;line-height:1.2">'+escapeHtml(q.name)+'</div>';
+    b.onclick = ()=>startSingle(q.id);
+    g.appendChild(b);
+  });
+}
+
+/* ====== クイズ ====== */
+let quiz = null; // 現在のクイズ状態
+
+function shuffle(arr){ const a = arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a }
+
+function buildOptions(question){
+  const correct = question.correct.slice();
+  const pool = ALL_OPTIONS.filter(o=>!correct.includes(o));
+  const dummies = shuffle(pool).slice(0, EXTRA_DUMMIES);
+  return shuffle(correct.concat(dummies));
+}
+
+function startSingle(qid){
+  const q = QUESTIONS.find(x=>x.id===qid);
+  quiz = {mode:"single", queue:[q], idx:0, results:[], startedAt:Date.now(), totalElapsed:0};
+  beginQuestion();
+}
+function startSequence(){
+  quiz = {mode:"sequence", queue:QUESTIONS.slice(), idx:0, results:[], startedAt:Date.now(), totalElapsed:0};
+  beginQuestion();
+}
+function beginQuestion(){
+  const q = quiz.queue[quiz.idx];
+  const options = buildOptions(q);
+  quiz.current = {q, options, selected:new Set(), startAt:Date.now()};
+  renderQuestion();
+  showView("quiz");
+  startTimer();
+}
+function renderQuestion(){
+  const {q, options, selected} = quiz.current;
+  document.getElementById("qBadge").textContent = "問" + q.id + " " + q.name;
+  document.getElementById("modeBadge").textContent = quiz.mode==="sequence" ? (quiz.idx+1)+"/"+quiz.queue.length+"問目" : "単問モード";
+  document.getElementById("qTitle").textContent = q.title;
+  document.getElementById("correctCount").textContent = q.correct.length;
+  const box = document.getElementById("optionsBox");
+  box.innerHTML = "";
+  options.forEach((opt,i)=>{
+    const d = document.createElement("div");
+    d.className = "option";
+    d.innerHTML = '<span class="mark"></span>'+escapeHtml(opt);
+    d.onclick = ()=>toggleOption(i, d);
+    box.appendChild(d);
+  });
+  updateRemaining();
+}
+function toggleOption(i, el){
+  const sel = quiz.current.selected;
+  const limit = quiz.current.q.correct.length;
+  if(sel.has(i)){
+    sel.delete(i);
+    el.classList.remove("selected");
+  }else{
+    if(sel.size >= limit){
+      // 上限
+      el.animate([{transform:"translateX(0)"},{transform:"translateX(-4px)"},{transform:"translateX(4px)"},{transform:"translateX(0)"}],{duration:200});
+      return;
+    }
+    sel.add(i);
+    el.classList.add("selected");
+  }
+  updateRemaining();
+}
+function updateRemaining(){
+  const limit = quiz.current.q.correct.length;
+  const rem = limit - quiz.current.selected.size;
+  document.getElementById("remaining").textContent = "あと "+rem+" 個 選択できます";
+  document.getElementById("submitBtn").disabled = (rem !== 0);
+}
+let timerId = null;
+function startTimer(){
+  clearInterval(timerId);
+  timerId = setInterval(()=>{
+    const s = Math.floor((Date.now()-quiz.current.startAt)/1000);
+    document.getElementById("timer").textContent = fmtTime(s);
+  }, 250);
+}
+function fmtTime(sec){
+  const m = Math.floor(sec/60).toString().padStart(2,"0");
+  const s = (sec%60).toString().padStart(2,"0");
+  return m+":"+s;
+}
+function fmtSec(sec){
+  if(sec<60) return sec+"秒";
+  const m=Math.floor(sec/60), s=sec%60;
+  return m+"分"+s+"秒";
+}
+function submitAnswer(){
+  clearInterval(timerId);
+  const {q, options, selected, startAt} = quiz.current;
+  const selectedTexts = Array.from(selected).map(i=>options[i]);
+  const correctSet = new Set(q.correct);
+  const selectedSet = new Set(selectedTexts);
+  let right=0;
+  selectedTexts.forEach(t=>{ if(correctSet.has(t)) right++; });
+  const total = q.correct.length;
+  const pct = Math.round(right/total*100);
+  const elapsed = Math.floor((Date.now()-startAt)/1000);
+  quiz.totalElapsed += elapsed;
+  const res = {qid:q.id, title:q.title, right, total, pct, elapsed, selectedTexts, options};
+  quiz.results.push(res);
+  // 記録
+  state.records.push({
+    ts: Date.now(),
+    type:"single",
+    qid:q.id, right, total, pct, elapsed
+  });
+  saveState();
+  // 表示
+  renderResult(res);
+  showView("result");
+}
+function renderResult(res){
+  const q = QUESTIONS.find(x=>x.id===res.qid);
+  document.getElementById("rTitle").textContent = "問"+q.id+" "+q.name+" - "+q.title;
+  document.getElementById("rPct").textContent = res.pct+"%";
+  document.getElementById("rCorrect").textContent = res.right;
+  document.getElementById("rTotal").textContent = res.total;
+  document.getElementById("rTime").textContent = fmtSec(res.elapsed);
+  document.getElementById("rQid").textContent = "";
+  const box = document.getElementById("rOptions");
+  box.innerHTML = "";
+  const selSet = new Set(res.selectedTexts);
+  const corrSet = new Set(q.correct);
+  res.options.forEach(opt=>{
+    const d = document.createElement("div");
+    d.className = "option";
+    let mark="";
+    if(selSet.has(opt) && corrSet.has(opt)){ d.classList.add("correct"); mark="○"; }
+    else if(selSet.has(opt) && !corrSet.has(opt)){ d.classList.add("wrong"); mark="×"; }
+    else if(!selSet.has(opt) && corrSet.has(opt)){ d.classList.add("missed"); mark="△"; }
+    else { mark=""; }
+    d.innerHTML = '<span class="mark">'+mark+'</span>'+escapeHtml(opt);
+    box.appendChild(d);
+  });
+  document.getElementById("rNote").textContent = q.note || "";
+  // 次ボタンの表示
+  const nextBtn = document.getElementById("nextBtn");
+  if(quiz.mode==="sequence" && quiz.idx < quiz.queue.length-1){
+    nextBtn.classList.remove("hidden");
+    const nq = quiz.queue[quiz.idx+1];
+    nextBtn.textContent = "次の問題へ（問"+nq.id+" "+nq.name+"）";
+  } else {
+    nextBtn.textContent = quiz.mode==="sequence" ? "総合結果へ" : "ホームへ";
+  }
+}
+function retryCurrent(){
+  const q = quiz.current.q;
+  const options = buildOptions(q);
+  quiz.current = {q, options, selected:new Set(), startAt:Date.now()};
+  // retryで増える記録は既に1件追加済みなので、ここでは戻るだけ
+  quiz.results.pop(); // 直前の結果を取り消し（セッション総合から除外）
+  // ただし記録（records）は残す（プレイ履歴として）
+  renderQuestion();
+  showView("quiz");
+  startTimer();
+}
+function nextQuestion(){
+  if(quiz.mode==="sequence"){
+    if(quiz.idx < quiz.queue.length-1){
+      quiz.idx++;
+      beginQuestion();
+    } else {
+      finishSequence();
+    }
+  } else {
+    showView("home");
+  }
+}
+function cancelQuiz(){
+  clearInterval(timerId);
+  showView("home");
+}
+function finishSequence(){
+  // 連続挑戦の合計
+  let right=0, total=0;
+  quiz.results.forEach(r=>{ right+=r.right; total+=r.total; });
+  const pct = Math.round(right/total*100);
+  const elapsed = quiz.totalElapsed;
+  state.records.push({
+    ts: Date.now(), type:"sequence", right, total, pct, elapsed,
+    details: quiz.results.map(r=>({qid:r.qid,right:r.right,total:r.total,pct:r.pct,elapsed:r.elapsed}))
+  });
+  saveState();
+  document.getElementById("sPct").textContent = pct+"%";
+  document.getElementById("sCorrect").textContent = right;
+  document.getElementById("sTotal").textContent = total;
+  document.getElementById("sTime").textContent = fmtSec(elapsed);
+  const tbl = document.getElementById("sTable");
+  tbl.innerHTML = "<thead><tr><th>問</th><th>名称</th><th>正答率</th><th>正解/全</th><th>時間</th></tr></thead><tbody>"+
+    quiz.results.map(r=>{
+      const qq = QUESTIONS.find(x=>x.id===r.qid);
+      return "<tr><td>問"+r.qid+"</td><td>"+escapeHtml(qq?qq.name:"")+"</td><td>"+r.pct+"%</td><td>"+r.right+"/"+r.total+"</td><td>"+fmtSec(r.elapsed)+"</td></tr>";
+    }).join("")+"</tbody>";
+  showView("session");
+}
+
+/* ====== 記録表示 ====== */
+let chartSeqObj=null, chartPerQObj=null, chartByQObj=null;
+function renderRecords(){
+  document.getElementById("deviceName").value = state.deviceName;
+  const recs = state.records;
+  document.getElementById("statCount").textContent = recs.length;
+  if(recs.length===0){
+    document.getElementById("statBest").textContent = "-";
+    document.getElementById("statFast").textContent = "-";
+    document.getElementById("statBestSub").textContent = "";
+    document.getElementById("statFastSub").textContent = "";
+    document.getElementById("statTotal").textContent = "0秒";
+  } else {
+    const best = recs.reduce((a,b)=>b.pct>a.pct?b:a);
+    document.getElementById("statBest").textContent = best.pct+"%";
+    document.getElementById("statBestSub").textContent = labelOf(best)+"・"+fmtDate(best.ts);
+    // 最短解答時間は pct=100 の記録のうち最短
+    const perfect = recs.filter(r=>r.pct===100);
+    if(perfect.length){
+      const fast = perfect.reduce((a,b)=>b.elapsed<a.elapsed?b:a);
+      document.getElementById("statFast").textContent = fmtSec(fast.elapsed);
+      document.getElementById("statFastSub").textContent = "100%達成時・"+labelOf(fast);
+    } else {
+      // 満点がないなら単純最短
+      const fast = recs.reduce((a,b)=>b.elapsed<a.elapsed?b:a);
+      document.getElementById("statFast").textContent = fmtSec(fast.elapsed);
+      document.getElementById("statFastSub").textContent = "※100%達成なし・"+labelOf(fast);
+    }
+    document.getElementById("statTotal").textContent = fmtSec(recs.reduce((s,r)=>s+r.elapsed,0));
+  }
+  // 通算正答率の推移（連続挑戦：問1〜問11）
+  const seqRecs = recs.filter(r=>r.type==="sequence" && r.details && r.details.length===QUESTIONS.length).slice().sort((a,b)=>a.ts-b.ts);
+  const seqLabels = seqRecs.map(r=>fmtDate(r.ts,true));
+  const seqData = seqRecs.map(r=>r.pct);
+  if(chartSeqObj) chartSeqObj.destroy();
+  chartSeqObj = new Chart(document.getElementById("chartSeq"),{
+    type:"line",
+    data:{labels:seqLabels,datasets:[{label:"通算正答率 %",data:seqData,borderColor:"#2b6cb0",backgroundColor:"rgba(43,108,176,.15)",tension:.25,fill:true,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+"%"}}}}
+  });
+  // 問選択ドロップダウン
+  const qSel = document.getElementById("qSelect");
+  const prev = qSel.value;
+  qSel.innerHTML = QUESTIONS.map(q=>'<option value="'+q.id+'">問'+q.id+' '+escapeHtml(q.name)+'</option>').join("");
+  if(prev) qSel.value = prev;
+  renderPerQChart();
+  // 問別
+  const byQ = {};
+  for(let i=1;i<=11;i++) byQ[i]={best:0,count:0,sum:0};
+  recs.forEach(r=>{
+    if(r.type==="single"){
+      byQ[r.qid].best = Math.max(byQ[r.qid].best, r.pct);
+      byQ[r.qid].count++; byQ[r.qid].sum += r.pct;
+    } else if(r.details){
+      r.details.forEach(d=>{
+        byQ[d.qid].best = Math.max(byQ[d.qid].best, d.pct);
+        byQ[d.qid].count++; byQ[d.qid].sum += d.pct;
+      });
+    }
+  });
+  const qLabels = Object.keys(byQ).map(k=>{const q=QUESTIONS.find(x=>x.id==k);return "問"+k+(q?" "+q.name:"");});
+  const qBest = Object.values(byQ).map(x=>x.best);
+  const qAvg = Object.values(byQ).map(x=>x.count?Math.round(x.sum/x.count):0);
+  if(chartByQObj) chartByQObj.destroy();
+  chartByQObj = new Chart(document.getElementById("chartByQ"),{
+    type:"bar",
+    data:{labels:qLabels,datasets:[
+      {label:"最高",data:qBest,backgroundColor:"#2b6cb0"},
+      {label:"平均",data:qAvg,backgroundColor:"#90cdf4"}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"}}}}
+  });
+  // 履歴テーブル
+  const rows = recs.slice().reverse().map(r=>{
+    const label = labelOf(r);
+    return "<tr><td>"+fmtDate(r.ts)+"</td><td>"+label+"</td><td>"+r.pct+"%</td><td>"+r.right+"/"+r.total+"</td><td>"+fmtSec(r.elapsed)+"</td></tr>";
+  }).join("");
+  document.getElementById("histTable").innerHTML = "<thead><tr><th>日時</th><th>内容</th><th>正答率</th><th>正解数</th><th>時間</th></tr></thead><tbody>"+rows+"</tbody>";
+}
+function renderPerQChart(){
+  const qid = parseInt(document.getElementById("qSelect").value, 10);
+  if(!qid) return;
+  const q = QUESTIONS.find(x=>x.id===qid);
+  // この問の履歴を、単問プレイ＋連続挑戦の該当問題から収集
+  const rows = [];
+  state.records.forEach(r=>{
+    if(r.type==="single" && r.qid===qid){
+      rows.push({ts:r.ts, pct:r.pct, src:"単問"});
+    } else if(r.type==="sequence" && r.details){
+      r.details.forEach(d=>{
+        if(d.qid===qid) rows.push({ts:r.ts, pct:d.pct, src:"連続"});
+      });
+    }
+  });
+  rows.sort((a,b)=>a.ts-b.ts);
+  const labels = rows.map(r=>fmtDate(r.ts,true)+"("+r.src+")");
+  const data = rows.map(r=>r.pct);
+  if(chartPerQObj) chartPerQObj.destroy();
+  chartPerQObj = new Chart(document.getElementById("chartPerQ"),{
+    type:"line",
+    data:{labels,datasets:[{label:"問"+qid+" "+q.name,data,borderColor:"#38a169",backgroundColor:"rgba(56,161,105,.15)",tension:.25,fill:true,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"}}},plugins:{legend:{display:true},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+"%"}}}}
+  });
+}
+function labelOf(r){
+  if(r.type==="sequence") return "連続挑戦（全"+(r.details?r.details.length:11)+"問）";
+  const q = QUESTIONS.find(x=>x.id===r.qid);
+  return "問"+r.qid+(q?" "+q.name:"");
+}
+function fmtDate(ts, short){
+  const d = new Date(ts);
+  const y = d.getFullYear(), m=(d.getMonth()+1).toString().padStart(2,"0"), day=d.getDate().toString().padStart(2,"0");
+  const hh=d.getHours().toString().padStart(2,"0"), mm=d.getMinutes().toString().padStart(2,"0");
+  if(short) return m+"/"+day+" "+hh+":"+mm;
+  return y+"/"+m+"/"+day+" "+hh+":"+mm;
+}
+function saveDeviceName(){
+  state.deviceName = document.getElementById("deviceName").value.trim() || state.deviceName;
+  saveState();
+}
+
+/* ====== 管理者 ====== */
+async function prepareAdmin(){
+  document.getElementById("adminContent").classList.add("hidden");
+  document.getElementById("adminLocked").classList.remove("hidden");
+  document.getElementById("adminPw").value = "";
+  document.getElementById("adminMsg").textContent = "";
+  if(!state.adminPwHash){
+    document.getElementById("adminMsg").textContent = "初回: 管理者パスワードを設定します。任意の文字列を入力してログインしてください。";
+  }
+}
+async function adminLogin(){
+  const pw = document.getElementById("adminPw").value;
+  if(!pw){document.getElementById("adminMsg").textContent="パスワードを入力してください";return;}
+  const h = await hashPw(pw);
+  if(!state.adminPwHash){
+    state.adminPwHash = h;
+    saveState();
+    openAdmin();
+    return;
+  }
+  if(h === state.adminPwHash){ openAdmin(); }
+  else { document.getElementById("adminMsg").textContent="パスワードが違います"; }
+}
+function adminLogout(){
+  document.getElementById("adminContent").classList.add("hidden");
+  document.getElementById("adminLocked").classList.remove("hidden");
+  document.getElementById("adminPw").value = "";
+}
+function adminReset(){
+  if(confirm("管理者パスワードをリセットしますか？（これまでの記録は保持されます）")){
+    state.adminPwHash = null; saveState();
+    prepareAdmin();
+  }
+}
+async function changePassword(){
+  const pw = prompt("新しい管理者パスワードを入力してください");
+  if(!pw) return;
+  state.adminPwHash = await hashPw(pw);
+  saveState();
+  alert("パスワードを変更しました。");
+}
+function openAdmin(){
+  document.getElementById("adminContent").classList.remove("hidden");
+  document.getElementById("adminLocked").classList.add("hidden");
+  buildDeviceSelect();
+  renderAdmin();
+}
+function allDevices(){
+  // 自端末 + インポート済み
+  const devs = {};
+  devs[state.deviceId] = {id:state.deviceId, name:state.deviceName+"（この端末）", records:state.records};
+  for(const k in state.imported){
+    const d = state.imported[k];
+    devs[k] = {id:k, name:d.name || ("端末-"+k.slice(-4)), records:d.records||[]};
+  }
+  return devs;
+}
+function buildDeviceSelect(){
+  const sel = document.getElementById("deviceSelect");
+  const devs = allDevices();
+  sel.innerHTML = "<option value=\"__all\">全端末まとめて</option>" + Object.values(devs).map(d=>'<option value="'+escapeHtml(d.id)+'">'+escapeHtml(d.name)+' ('+d.records.length+'件)</option>').join("");
+}
+let adminChartObj=null, adminQChartObj=null, adminPerQChartObj=null;
+let adminRecsCache=[];
+function renderAdmin(){
+  const sel = document.getElementById("deviceSelect").value;
+  const devs = allDevices();
+  let recs = [];
+  if(sel==="__all"){
+    Object.values(devs).forEach(d=>{ d.records.forEach(r=>{ recs.push({...r, _dev:d.name}); }); });
+  } else {
+    recs = (devs[sel]?.records || []).map(r=>({...r,_dev:devs[sel].name}));
+  }
+  document.getElementById("aCount").textContent = recs.length;
+  document.getElementById("aTotal").textContent = fmtSec(recs.reduce((s,r)=>s+(r.elapsed||0),0));
+  if(recs.length){
+    const avg = Math.round(recs.reduce((s,r)=>s+r.pct,0)/recs.length);
+    const best = recs.reduce((a,b)=>b.pct>a.pct?b:a);
+    document.getElementById("aAvg").textContent = avg+"%";
+    document.getElementById("aBest").textContent = best.pct+"%";
+  } else {
+    document.getElementById("aAvg").textContent="-";
+    document.getElementById("aBest").textContent="-";
+  }
+  adminRecsCache = recs;
+  // 通算正答率（全11問連続挑戦のみ）
+  const seqRecs = recs.filter(r=>r.type==="sequence" && r.details && r.details.length===QUESTIONS.length).slice().sort((a,b)=>a.ts-b.ts);
+  const labels = seqRecs.map(r=>fmtDate(r.ts,true)+(r._dev?"・"+r._dev:""));
+  const data = seqRecs.map(r=>r.pct);
+  if(adminChartObj) adminChartObj.destroy();
+  adminChartObj = new Chart(document.getElementById("adminChart"),{
+    type:"line",
+    data:{labels,datasets:[{label:"通算正答率 %",data,borderColor:"#38a169",backgroundColor:"rgba(56,161,105,.15)",tension:.25,fill:true,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"}}},plugins:{legend:{display:false}}}
+  });
+  // 問選択ドロップダウン
+  const aqSel = document.getElementById("adminQSelect");
+  const aprev = aqSel.value;
+  aqSel.innerHTML = QUESTIONS.map(q=>'<option value="'+q.id+'">問'+q.id+' '+escapeHtml(q.name)+'</option>').join("");
+  if(aprev) aqSel.value = aprev;
+  renderAdminPerQ();
+  // 問別
+  const byQ={}; for(let i=1;i<=11;i++) byQ[i]={count:0,sum:0};
+  recs.forEach(r=>{
+    if(r.type==="single") { byQ[r.qid].count++; byQ[r.qid].sum+=r.pct; }
+    else if(r.details){ r.details.forEach(d=>{ byQ[d.qid].count++; byQ[d.qid].sum+=d.pct; }); }
+  });
+  const qLabels = Object.keys(byQ).map(k=>{const q=QUESTIONS.find(x=>x.id==k);return "問"+k+(q?" "+q.name:"");});
+  const qAvg = Object.values(byQ).map(x=>x.count?Math.round(x.sum/x.count):0);
+  if(adminQChartObj) adminQChartObj.destroy();
+  adminQChartObj = new Chart(document.getElementById("adminQChart"),{
+    type:"bar",
+    data:{labels:qLabels,datasets:[{label:"平均正答率",data:qAvg,backgroundColor:"#38a169"}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"}}}}
+  });
+  // テーブル
+  const rows = recs.slice().sort((a,b)=>b.ts-a.ts).map(r=>{
+    return "<tr><td>"+fmtDate(r.ts)+"</td><td>"+escapeHtml(r._dev||"")+"</td><td>"+labelOf(r)+"</td><td>"+r.pct+"%</td><td>"+(r.right||"-")+"/"+(r.total||"-")+"</td><td>"+fmtSec(r.elapsed||0)+"</td></tr>";
+  }).join("");
+  document.getElementById("adminTable").innerHTML = "<thead><tr><th>日時</th><th>端末</th><th>内容</th><th>正答率</th><th>正解数</th><th>時間</th></tr></thead><tbody>"+rows+"</tbody>";
+}
+
+function renderAdminPerQ(){
+  const qid = parseInt(document.getElementById("adminQSelect").value, 10);
+  if(!qid) return;
+  const q = QUESTIONS.find(x=>x.id===qid);
+  const rows = [];
+  adminRecsCache.forEach(r=>{
+    if(r.type==="single" && r.qid===qid){
+      rows.push({ts:r.ts, pct:r.pct, src:"単問", dev:r._dev||""});
+    } else if(r.type==="sequence" && r.details){
+      r.details.forEach(d=>{
+        if(d.qid===qid) rows.push({ts:r.ts, pct:d.pct, src:"連続", dev:r._dev||""});
+      });
+    }
+  });
+  rows.sort((a,b)=>a.ts-b.ts);
+  const labels = rows.map(r=>fmtDate(r.ts,true)+"("+r.src+(r.dev?"・"+r.dev:"")+")");
+  const data = rows.map(r=>r.pct);
+  if(adminPerQChartObj) adminPerQChartObj.destroy();
+  adminPerQChartObj = new Chart(document.getElementById("adminPerQChart"),{
+    type:"line",
+    data:{labels,datasets:[{label:"問"+qid+" "+q.name,data,borderColor:"#dd6b20",backgroundColor:"rgba(221,107,32,.15)",tension:.25,fill:true,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"}}},plugins:{legend:{display:true}}}
+  });
+}
+function exportData(){
+  const payload = {deviceId:state.deviceId, deviceName:state.deviceName, records:state.records, exportedAt:Date.now()};
+  const txt = JSON.stringify(payload,null,2);
+  const box = document.getElementById("exportBox");
+  box.classList.remove("hidden");
+  document.getElementById("exportText").value = txt;
+  // ファイルとしてもダウンロード
+  const blob = new Blob([txt],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "kansen-quiz-"+state.deviceName+"-"+Date.now()+".json"; a.click();
+  URL.revokeObjectURL(url);
+}
+function copyExport(){
+  const t = document.getElementById("exportText");
+  t.select(); document.execCommand("copy");
+  alert("コピーしました");
+}
+function importData(){
+  try{
+    const t = document.getElementById("importText").value;
+    const d = JSON.parse(t);
+    if(!d.deviceId || !Array.isArray(d.records)) throw new Error("形式が不正");
+    if(d.deviceId === state.deviceId){
+      // 自端末 → 記録にマージ（重複排除 ts+pct+qid/type）
+      const seen = new Set(state.records.map(r=>r.ts+"|"+(r.qid||"seq")+"|"+r.pct));
+      let added = 0;
+      d.records.forEach(r=>{
+        const k = r.ts+"|"+(r.qid||"seq")+"|"+r.pct;
+        if(!seen.has(k)){ state.records.push(r); seen.add(k); added++; }
+      });
+      alert("自端末の記録に"+added+"件追加しました");
+    } else {
+      state.imported[d.deviceId] = {name:d.deviceName, records:d.records};
+      alert("端末「"+d.deviceName+"」の"+d.records.length+"件を登録しました");
+    }
+    saveState();
+    buildDeviceSelect();
+    renderAdmin();
+  }catch(e){
+    alert("インポート失敗: "+e.message);
+  }
+}
+function clearAllData(){
+  if(!confirm("本当に全ての記録を削除しますか？（この端末＋インポート分）")) return;
+  if(!confirm("元に戻せません。よろしいですか？")) return;
+  state.records = [];
+  state.imported = {};
+  saveState();
+  buildDeviceSelect();
+  renderAdmin();
+}
+
+/* ====== utils ====== */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+/* 初期化 */
+renderHome();
+showView("home");
+</script>
+</body>
+</html>
